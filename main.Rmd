@@ -1,0 +1,67 @@
+---
+title: "Universidad de Costa Rica <br> Estadística Espacial"
+subtitle: "Tarea 4"
+author: "Fabián Hernández"
+output: 
+    html_document:
+      fig_caption: true
+      theme: cerulean
+      highlight: tango
+---
+
+<script>
+   $(document).ready(function() {
+     $head = $('#header');
+     $head.prepend('<img src=\"logo.png\" style=\"float: right;width: 250px;\"/>')
+   });
+</script>
+
+# {.tabset .tabset-fade .tabset-pills}
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(comment=" ",cache=T)
+
+library(sf)
+library(spData)
+library(tidyverse)
+library(spDataLarge)
+library(tmap)
+library(rgdal)
+library(maptools)
+library(raster)
+library(ggplot2)
+library(ggspatial)
+library(spatstat)
+library(lattice)
+library(georob)
+library(multcomp)
+library(maptools)
+library(spdep)
+```
+
+Lo primero que hacemos es leer el área(en forma de polígono) con la información de área que queremos analizar.
+```{r, echo=TRUE}
+chi.poly <- readShapePoly('foreclosures.shp')
+chi.ols<-lm(violent~est_fcs_rt+bls_unemp, data=chi.poly@data)
+class(chi.poly)
+```
+
+Se realiza una regresión lineal simple sin tomar en cuenta la relación espacial de los datos.
+```{r, echo=TRUE}
+chi.ols<-lm(violent~est_fcs_rt+bls_unemp, data=chi.poly@data)
+summary(chi.ols)
+```
+
+Para empezar a comprobar la relación espacial de las observaciones, se toma como vecino cualquier observación que comparta un limite entre si. El criterio usado es el llamado Queen. Además, se muestra el gráfico con los vecinos de cada poligono según el criterio utilizado.
+```{r, echo=TRUE}
+list.queen<-poly2nb(chi.poly, queen=TRUE)
+W<-nb2listw(list.queen, style="W", zero.policy=TRUE)
+W
+plot(W,coordinates(chi.poly))
+```
+
+Si se quisiera por ejemplo, en lugar de usar el criterio de Queen para obtener la matriz de pesos, usar la distancia entre las observaciones, se puede usar la función coordinates, para obtener los centroides de cada uno de los poligonos y la función dnearneigh para escoger los vecinos a x kilometros. En el ejemplo del libro, se estan usando los vecinos a 1km.
+```{r, echo=TRUE}
+coords<-coordinates(chi.poly)
+W_dist<-dnearneigh(coords,0,1,longlat = FALSE)
+```
