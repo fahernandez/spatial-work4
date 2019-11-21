@@ -37,10 +37,11 @@ library(georob)
 library(multcomp)
 library(maptools)
 library(spdep)
+library(RColorBrewer)
 ```
 
 Lo primero que hacemos es leer el área(en forma de polígono) con la información de área que queremos analizar.
-```{r, echo=TRUE}
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
 chi.poly <- readShapePoly('foreclosures.shp')
 chi.ols<-lm(violent~est_fcs_rt+bls_unemp, data=chi.poly@data)
 class(chi.poly)
@@ -64,4 +65,57 @@ Si se quisiera por ejemplo, en lugar de usar el criterio de Queen para obtener l
 ```{r, echo=TRUE}
 coords<-coordinates(chi.poly)
 W_dist<-dnearneigh(coords,0,1,longlat = FALSE)
+```
+
+Se usa el test de Moran para probar correlación espacial de las observaciones. En este caso se realiza el test con la matriz de pesos con el criterio de Queen. Diferentes escogencias de este criterio de pesos, darían resultados diferentes.
+```{r, echo=TRUE}
+moran.lm<-lm.morantest(chi.ols, W, alternative="two.sided")
+print(moran.lm)
+```
+
+Además, se prueba también la correlación espacial, pero esta vez con el test de multiplicadores de Langrange. Este test tiene la ventaja, que si especificado, prueba la presencia de lag espacial y de lag espacial en los errores.
+```{r, echo=TRUE}
+LM<-lm.LMtests(chi.ols, W, test="all")
+print(LM)
+```
+
+
+A la hora de hacer la regresión espacial, se puede hacer de dos maneras. Una es asumiendo normalidad en los errores y por máxima verosimilitud, por medio de la siguiente función. En este caso se hace la regresión espacial, con las variables dependientes del set de datos de violencia en Chicago.
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+sar.chi<-lagsarlm(violent~est_fcs_rt+bls_unemp, data=chi.poly@data, W)
+summary(sar.chi)
+```
+
+La otra manera de realizar la regresión espacial es con el método de minimos cuadrados en dos etapas. En la función siguiente se realiza esta regresión. 
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+sar2sls.chi<-stsls(violent~est_fcs_rt+bls_unemp, data=chi.poly@data, W)
+summary(sar2sls.chi)
+```
+
+Se compara los residuos de la regresión ordinal con los residuos de la regresion espacial. Para esto, sobre el mapa original, para ambos escenarios, se hace plot de los residuos. Como era de esperarse, la regresión espacial es más adecuada para este escenario.
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+chi.poly@data$chi.ols.res<-resid(chi.ols) #residuals ols
+
+chi.poly@data$chi.sar.res<-resid(sar.chi) #residual sar
+
+spplot(chi.poly,"chi.ols.res", at=seq(min(chi.poly@data$chi.ols.res,na.rm=TRUE),max(chi.poly@data$chi.ols.res,na.rm=TRUE),length=12),col.regions=rev(brewer.pal(11,"RdBu")))
+
+spplot(chi.poly,"chi.sar.res",at=seq(min(chi.poly@data$chi.sar.res,na.rm=TRUE),max(chi.poly@data$chi.sar,na.rm=TRUE), length=12), col.regions=rev(brewer.pal(11,"RdBu")))
+```
+
+Con esta función, se puede ver el impacto de las variables utilizadas en la regresión. Siendo la variable est_fcs_rt la de mayor impacto.
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+impacts(sar.chi, listw=W)
+```
+
+Por último, se estima el modelo de errores espacial primero con estimación de máxima verosimilitud.
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+errorsalm.chi<-errorsarlm(violent~est_fcs_rt+bls_unemp, data=chi.poly@data, W)
+summary(errorsalm.chi)
+```
+
+Y finalmente el mismo modelo, pero con el método de estimación generalizada de minimos cuadrados.
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+fgls.chi<-GMerrorsar(violent~est_fcs_rt+bls_unemp, data=chi.poly@data, W)
+summary(fgls.chi)
 ```
